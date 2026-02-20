@@ -39,10 +39,25 @@ services:
     build: .
     env_file: .env
     volumes:
+      - ./src:/app:ro
       - ~/projects/pydantic-assets/gog:/app/gog:ro
     depends_on:
       - vllm
       - searxng
+    restart: unless-stopped
+    networks:
+      - pydantic-net
+
+  git-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile.sync
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/repo
+    environment:
+      - SYNC_INTERVAL=5
+      - BOT_CONTAINER=pydantic-pydantic-bot-1
     restart: unless-stopped
     networks:
       - pydantic-net

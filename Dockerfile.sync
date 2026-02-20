@@ -1,0 +1,8 @@
+FROM docker:cli
+
+RUN apk add --no-cache git bash
+
+COPY scripts/git-sync.sh /git-sync.sh
+RUN chmod +x /git-sync.sh
+
+CMD ["/git-sync.sh"]
