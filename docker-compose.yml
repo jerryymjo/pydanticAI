@@ -39,7 +39,7 @@ services:
     build: .
     env_file: .env
     volumes:
-      - ./src:/app:ro
+      - ./src:/app
       - ~/projects/pydantic-assets/gog:/app/gog:ro
     depends_on:
       - vllm
