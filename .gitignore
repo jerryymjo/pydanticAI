@@ -20,5 +20,9 @@ gog
 .DS_Store
 Thumbs.db
 
+# Docs (local only)
+docs/
+*.md
+
 # Claude Code
 .claude/
