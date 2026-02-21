@@ -44,6 +44,11 @@ agent = Agent(
 )
 
 
+WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
+
+
 @agent.system_prompt
 def dynamic_date() -> str:
-    return f'오늘 날짜: {date.today().isoformat()}'
+    today = date.today()
+    wd = WEEKDAYS[today.weekday()]
+    return f'오늘: {today.isoformat()} ({wd}요일)'
