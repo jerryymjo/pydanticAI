@@ -4,9 +4,15 @@ import html
 import re
 
 
+def strip_think(text: str) -> str:
+    """Remove Qwen3 <think>...</think> blocks from model output."""
+    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
+
 def md_to_html(text: str) -> str:
     """Convert common Markdown to Telegram-safe HTML."""
-    t = html.escape(text)
+    t = strip_think(text)
+    t = html.escape(t)
     # code blocks: ```lang\n...\n``` → <pre><code>...</code></pre>
     t = re.sub(
         r'```(?:\w*)\n(.*?)```',
@@ -33,7 +39,7 @@ def md_to_html(text: str) -> str:
 
 def strip_markdown(text: str) -> str:
     """Strip Markdown formatting, returning clean plain text."""
-    t = text
+    t = strip_think(text)
     # code blocks → content only
     t = re.sub(r'```(?:\w*)\n(.*?)```', r'\1', t, flags=re.DOTALL)
     # inline code → content only

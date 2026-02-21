@@ -17,7 +17,7 @@ from telegram.ext import (
 
 from agent import agent  # noqa: F401 — must import before tools
 import tools  # noqa: F401 — registers tools on agent
-from format import md_to_html, strip_markdown
+from format import md_to_html, strip_markdown, strip_think
 from pydantic_ai.messages import ModelMessage
 
 logging.basicConfig(
@@ -91,9 +91,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     last_edit_time = now
 
             # Final update: always apply HTML formatting
+            # Strip <think> tags from Qwen3 thinking output
+            buffer = strip_think(buffer)
             if buffer:
                 formatted = md_to_html(buffer)
                 plain = strip_markdown(buffer)
+                if not plain:
+                    plain = buffer
                 if sent_message is None:
                     try:
                         sent_message = await update.message.reply_text(
