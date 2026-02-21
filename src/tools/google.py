@@ -14,9 +14,21 @@ GOG_ACCOUNT = os.getenv('GOG_ACCOUNT', '')
 
 @agent.tool_plain
 async def gog(command: str) -> str:
-    """Google 서비스에 접근합니다 (Gmail, Calendar, Chat, Drive, Docs, Sheets, Tasks 등).
+    """Google 서비스 CLI. 명령어와 플래그를 문자열로 전달합니다.
 
-    예: 'gmail search "from:someone"', 'calendar list', 'drive list', 'tasks list'
+    캘린더:
+      'calendar list' - 오늘 일정
+      'calendar list --tomorrow' - 내일 일정
+      'calendar list --week' - 이번 주 일정
+      'calendar list --days=3' - 앞으로 3일 일정
+      'calendar list --from=2026-02-25 --to=2026-02-28' - 특정 기간 일정
+    Gmail:
+      'gmail list' - 받은편지함
+      'gmail search "from:someone subject:hello"' - 검색
+    드라이브: 'drive list', 'drive search "keyword"'
+    할일: 'tasks list'
+
+    주의: 시간 필터는 반드시 --플래그로 전달하세요 (예: --tomorrow, --week).
     """
     args = [GOG_PATH]
     if GOG_ACCOUNT:
