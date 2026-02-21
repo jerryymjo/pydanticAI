@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import re
 from datetime import date, timedelta
 from typing import Literal
 
@@ -120,22 +121,33 @@ async def gog(
                 args.append(item_id)
 
     # ===== calendar 날짜 플래그 =====
+    is_date_only = lambda d: bool(re.match(r'^\d{4}-\d{2}-\d{2}$', d))
+    is_query = action in ('list', 'search')
+
     if today:
         args.append('--today')
     elif tomorrow:
         args.append('--tomorrow')
     elif from_date:
-        args.append(f'--from={from_date}')
-        if to_date:
-            if from_date == to_date:
-                next_day = (date.fromisoformat(to_date) + timedelta(days=1)).isoformat()
-                args.append(f'--to={next_day}')
-                logger.info('gog: adjusted --to=%s → --to=%s (exclusive end)', to_date, next_day)
-            else:
-                args.append(f'--to={to_date}')
+        # create/update에서 날짜만 주면 → 종일 일정
+        if not is_query and is_date_only(from_date):
+            args.append(f'--from={from_date}')
+            args.append(f'--to={to_date if to_date else from_date}')
+            args.append('--all-day')
         else:
-            next_day = (date.fromisoformat(from_date) + timedelta(days=1)).isoformat()
-            args.append(f'--to={next_day}')
+            args.append(f'--from={from_date}')
+            if to_date:
+                # list/search: exclusive end-date 보정
+                if is_query and from_date == to_date:
+                    next_day = (date.fromisoformat(to_date) + timedelta(days=1)).isoformat()
+                    args.append(f'--to={next_day}')
+                    logger.info('gog: adjusted --to=%s → --to=%s (exclusive end)', to_date, next_day)
+                else:
+                    args.append(f'--to={to_date}')
+            elif is_query:
+                # list/search: from만 있으면 하루치 자동 설정
+                next_day = (date.fromisoformat(from_date) + timedelta(days=1)).isoformat()
+                args.append(f'--to={next_day}')
     elif days > 0:
         args.append(f'--days={days}')
 
