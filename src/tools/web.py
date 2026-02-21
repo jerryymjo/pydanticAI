@@ -1,6 +1,7 @@
-"""Web tools: search, web_fetch, search_and_read."""
+"""Web tools: search (unified), web_fetch."""
 
 import asyncio
+import html as html_mod
 import logging
 import os
 import random
@@ -13,6 +14,8 @@ from agent import agent
 logger = logging.getLogger(__name__)
 
 SEARXNG_URL = os.getenv('SEARXNG_URL', 'http://searxng:8080')
+NAVER_CLIENT_ID = os.getenv('NAVER_CLIENT_ID', '')
+NAVER_CLIENT_SECRET = os.getenv('NAVER_CLIENT_SECRET', '')
 
 _USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -82,25 +85,92 @@ async def _fetch_and_extract(url: str) -> str:
     return f'본문을 추출할 수 없습니다: {url}'
 
 
+async def _searxng_search(query: str) -> list[dict]:
+    """SearXNG 검색 결과 반환."""
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f'{SEARXNG_URL}/search',
+                params={'q': query, 'format': 'json'},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return data.get('results', [])[:5]
+    except Exception as e:
+        logger.error('SearXNG search failed: %s', e)
+        return []
+
+
+async def _naver_news_search(query: str) -> list[dict]:
+    """네이버 뉴스 검색. API 키 없으면 빈 리스트 반환."""
+    if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
+        return []
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                'https://openapi.naver.com/v1/search/news.json',
+                params={'query': query, 'display': 3, 'sort': 'date'},
+                headers={
+                    'X-Naver-Client-Id': NAVER_CLIENT_ID,
+                    'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        items = data.get('items', [])
+        results = []
+        for item in items:
+            title = html_mod.unescape(item['title'].replace('<b>', '').replace('</b>', ''))
+            desc = html_mod.unescape(item['description'].replace('<b>', '').replace('</b>', ''))
+            results.append({'title': title, 'url': item['link'], 'content': desc, 'source': 'naver_news'})
+        return results
+    except Exception as e:
+        logger.error('Naver news search failed: %s', e)
+        return []
+
+
 @agent.tool_plain
-async def search(query: str) -> str:
-    """SearXNG로 웹 검색을 수행합니다."""
-    logger.info('search tool called: %s', query)
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f'{SEARXNG_URL}/search',
-            params={'q': query, 'format': 'json'},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    results = data.get('results', [])[:5]
-    if not results:
-        return '검색 결과가 없습니다.'
-    return '\n\n'.join(
-        f"**{r['title']}** ({r['url']})\n{r.get('content', '')}"
-        for r in results
+async def search(query: str, read_content: bool = False) -> str:
+    """웹 및 뉴스 통합 검색. read_content=True면 상위 결과 본문도 읽어옵니다."""
+    logger.info('search tool called: query=%s, read_content=%s', query, read_content)
+
+    # 1. SearXNG + 네이버 뉴스 병렬 검색
+    web_results, news_results = await asyncio.gather(
+        _searxng_search(query),
+        _naver_news_search(query),
     )
+
+    # 2. 결과 합치기
+    all_results = []
+    for r in web_results:
+        all_results.append(f"**{r['title']}** ({r['url']})\n{r.get('content', '')}")
+    if news_results:
+        all_results.append('\n📰 **뉴스**')
+        for r in news_results:
+            all_results.append(f"**{r['title']}** ({r['url']})\n{r['content']}")
+
+    if not all_results:
+        return '검색 결과가 없습니다.'
+
+    output = '\n\n'.join(all_results)
+
+    # 3. read_content=True면 상위 3개 본문 병렬 fetch
+    if read_content:
+        urls_to_read = [r['url'] for r in (web_results + news_results)[:3]]
+
+        async def _read(url: str) -> str:
+            body = await _fetch_and_extract(url)
+            if len(body) > 3000:
+                body = body[:3000] + '\n... (잘림)'
+            return f"---\nURL: {url}\n\n{body}"
+
+        bodies = await asyncio.gather(*[_read(u) for u in urls_to_read])
+        output += '\n\n' + '\n\n'.join(bodies)
+
+    logger.info('search result: %d web + %d news items', len(web_results), len(news_results))
+    return output
 
 
 @agent.tool_plain
@@ -111,31 +181,3 @@ async def web_fetch(url: str) -> str:
     if len(text) > 8000:
         text = text[:8000] + '\n... (잘림)'
     return text
-
-
-@agent.tool_plain
-async def search_and_read(query: str) -> str:
-    """웹 검색 후 상위 결과들의 본문을 읽어옵니다."""
-    logger.info('search_and_read tool called: %s', query)
-    # 검색
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f'{SEARXNG_URL}/search',
-            params={'q': query, 'format': 'json'},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    results = data.get('results', [])[:3]
-    if not results:
-        return '검색 결과가 없습니다.'
-
-    # 상위 3개 본문 병렬 읽기
-    async def _read(r: dict) -> str:
-        body = await _fetch_and_extract(r['url'])
-        if len(body) > 3000:
-            body = body[:3000] + '\n... (잘림)'
-        return f"## {r['title']}\nURL: {r['url']}\n\n{body}"
-
-    bodies = await asyncio.gather(*[_read(r) for r in results])
-    return '\n\n---\n\n'.join(bodies)
