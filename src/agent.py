@@ -14,7 +14,9 @@ VLLM_BASE_URL = os.getenv('VLLM_BASE_URL', 'http://vllm:8000/v1')
 VLLM_MODEL = os.getenv('VLLM_MODEL', 'mesolitica/Qwen2.5-72B-Instruct-FP8')
 SYSTEM_PROMPT = os.getenv(
     'SYSTEM_PROMPT',
-    '너는 자비스다. 한국어로 답하라. 도구를 적극적으로 활용해라.',
+    '너는 자비스다. 한국어로 답하라. 도구를 적극적으로 활용해라.\n'
+    '일정, 이메일, 드라이브, 할일 등 Google 관련 요청에는 반드시 gog 도구를 사용해라.\n'
+    '추측하거나 지어내지 말고, 항상 도구를 호출하여 실제 데이터를 가져와라.',
 )
 
 model = OpenAIChatModel(
