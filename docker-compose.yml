@@ -41,6 +41,7 @@ services:
     volumes:
       - ./src:/app
       - ~/projects/pydantic-assets/gog:/app/gog:ro
+      - ~/.config/gogcli:/root/.config/gogcli:ro
     depends_on:
       - vllm
       - searxng

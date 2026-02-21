@@ -11,6 +11,7 @@ from agent import agent
 
 SEARXNG_URL = os.getenv('SEARXNG_URL', 'http://searxng:8080')
 GOG_PATH = os.getenv('GOG_PATH', '/app/gog')
+GOG_ACCOUNT = os.getenv('GOG_ACCOUNT', '')
 
 _USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -138,13 +139,17 @@ async def search_and_read(query: str) -> str:
 
 @agent.tool_plain
 async def gog(command: str) -> str:
-    """Google 서비스에 접근합니다 (Gmail, Calendar, Drive 등).
+    """Google 서비스에 접근합니다 (Gmail, Calendar, Chat, Drive, Docs, Sheets, Tasks 등).
 
-    예: 'mail list', 'cal today', 'drive list'
+    예: 'gmail search "from:someone"', 'calendar list', 'drive list', 'tasks list'
     """
+    args = [GOG_PATH]
+    if GOG_ACCOUNT:
+        args.append(f'--account={GOG_ACCOUNT}')
+    args.extend(['--no-input', '--json'])
+    args.extend(command.split())
     proc = await asyncio.create_subprocess_exec(
-        GOG_PATH,
-        *command.split(),
+        *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
