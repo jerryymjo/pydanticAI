@@ -37,8 +37,19 @@ def _base_args() -> list[str]:
 async def gog(command: str) -> str:
     """Google 서비스 CLI (Gmail, Calendar, Drive, Tasks 등).
 
-    예: 'calendar list', 'gmail list', 'drive list', 'tasks list'
-    명령어가 실패하면 사용법이 자동으로 표시됩니다. 그걸 보고 올바른 플래그로 다시 호출하세요.
+    캘린더:
+      'calendar list --today' - 오늘 일정
+      'calendar list --tomorrow' - 내일 일정
+      'calendar list --from=2026-02-25 --to=2026-02-26' - 특정 기간 일정
+      'calendar list --days=7' - 앞으로 7일간 일정
+
+    기타:
+      'gmail list' - 이메일 목록
+      'drive list' - 드라이브 파일
+      'tasks list' - 할일 목록
+
+    주의: --date 플래그는 없습니다. 날짜 조회는 반드시 --from/--to 또는 --today/--tomorrow를 사용하세요.
+    명령어가 실패하면 사용법이 자동으로 표시됩니다.
     """
     parts = command.split()
     # Normalize space-separated flags to = format: --from 2026-01-01 → --from=2026-01-01
