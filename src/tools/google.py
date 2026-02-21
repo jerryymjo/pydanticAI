@@ -13,6 +13,17 @@ logger = logging.getLogger(__name__)
 
 GOG_PATH = os.getenv('GOG_PATH', '/app/gog')
 GOG_ACCOUNT = os.getenv('GOG_ACCOUNT', '')
+GOG_TIMEZONE = os.getenv('GOG_TIMEZONE', '+09:00')  # KST
+
+
+def _ensure_tz(dt_str: str) -> str:
+    """시간이 포함된 날짜에 타임존이 없으면 자동 추가."""
+    if not dt_str or 'T' not in dt_str:
+        return dt_str
+    # 이미 타임존이 있으면 그대로 (+, Z)
+    if '+' in dt_str.split('T')[1] or dt_str.endswith('Z'):
+        return dt_str
+    return dt_str + GOG_TIMEZONE
 
 
 async def _run_gog(args: list[str]) -> tuple[str, str, int]:
@@ -92,6 +103,8 @@ async def gog(
         query: 검색어 (calendar search, gmail search, drive search)
         item_id: 대상 ID (eventId, messageId, taskId, fileId)
     """
+    from_date = _ensure_tz(from_date)
+    to_date = _ensure_tz(to_date)
     args = _base_args() + [service, action]
 
     # ===== positional args =====
