@@ -12,42 +12,44 @@ GOG_PATH = os.getenv('GOG_PATH', '/app/gog')
 GOG_ACCOUNT = os.getenv('GOG_ACCOUNT', '')
 
 
-@agent.tool_plain
-async def gog(command: str) -> str:
-    """Google 서비스 CLI. 명령어와 플래그를 문자열로 전달합니다.
-
-    캘린더:
-      'calendar list' - 오늘 일정
-      'calendar list --tomorrow' - 내일 일정
-      'calendar list --week' - 이번 주 일정
-      'calendar list --days=3' - 앞으로 3일 일정
-      'calendar list --from=2026-02-25 --to=2026-02-28' - 특정 기간 일정
-    Gmail:
-      'gmail list' - 받은편지함
-      'gmail search "from:someone subject:hello"' - 검색
-    드라이브: 'drive list', 'drive search "keyword"'
-    할일: 'tasks list'
-
-    주의: 시간 필터는 반드시 --플래그로 전달하세요 (예: --tomorrow, --week).
-    """
-    args = [GOG_PATH]
-    if GOG_ACCOUNT:
-        args.append(f'--account={GOG_ACCOUNT}')
-    args.extend(['--no-input', '--json'])
-    args.extend(command.split())
-    logger.info('gog tool called: %s', ' '.join(args))
+async def _run_gog(args: list[str]) -> tuple[str, str, int]:
+    """Run gog binary and return (stdout, stderr, returncode)."""
     proc = await asyncio.create_subprocess_exec(
         *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
     stdout, stderr = await proc.communicate()
-    output = stdout.decode()
-    if proc.returncode != 0:
-        err = stderr.decode()
-        logger.error('gog failed (rc=%d): %s', proc.returncode, err)
-        output += f'\nError: {err}'
+    return stdout.decode(), stderr.decode(), proc.returncode
+
+
+def _base_args() -> list[str]:
+    args = [GOG_PATH]
+    if GOG_ACCOUNT:
+        args.append(f'--account={GOG_ACCOUNT}')
+    args.extend(['--no-input', '--json'])
+    return args
+
+
+@agent.tool_plain
+async def gog(command: str) -> str:
+    """Google 서비스 CLI (Gmail, Calendar, Drive, Tasks 등).
+
+    예: 'calendar list', 'gmail list', 'drive list', 'tasks list'
+    명령어가 실패하면 사용법이 자동으로 표시됩니다. 그걸 보고 올바른 플래그로 다시 호출하세요.
+    """
+    parts = command.split()
+    args = _base_args() + parts
+    logger.info('gog tool called: %s', ' '.join(args))
+    stdout, stderr, rc = await _run_gog(args)
+    output = stdout
+    if rc != 0:
+        logger.error('gog failed (rc=%d): %s', rc, stderr)
+        # Auto-attach help for the subcommand so LLM can self-correct
+        help_args = [GOG_PATH] + parts[:2] + ['--help']
+        help_out, _, _ = await _run_gog(help_args)
+        output = f'Error: {stderr}\n\n--- 사용법 ({" ".join(parts[:2])}) ---\n{help_out}'
     if len(output) > 4000:
         output = output[:4000] + '\n... (잘림)'
-    logger.info('gog result: %d chars, rc=%d', len(output), proc.returncode)
+    logger.info('gog result: %d chars, rc=%d', len(output), rc)
     return output
