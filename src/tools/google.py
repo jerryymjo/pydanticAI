@@ -3,6 +3,8 @@
 import asyncio
 import logging
 import os
+import re
+from datetime import date, timedelta
 
 from agent import agent
 
@@ -39,6 +41,20 @@ async def gog(command: str) -> str:
     명령어가 실패하면 사용법이 자동으로 표시됩니다. 그걸 보고 올바른 플래그로 다시 호출하세요.
     """
     parts = command.split()
+    # Fix: Google Calendar API --to is exclusive.
+    # If --from and --to are the same date, bump --to by 1 day.
+    from_val = to_val = None
+    for p in parts:
+        m = re.match(r'^--from=(\d{4}-\d{2}-\d{2})$', p)
+        if m:
+            from_val = m.group(1)
+        m = re.match(r'^--to=(\d{4}-\d{2}-\d{2})$', p)
+        if m:
+            to_val = m.group(1)
+    if from_val and to_val and from_val == to_val:
+        next_day = (date.fromisoformat(to_val) + timedelta(days=1)).isoformat()
+        parts = [f'--to={next_day}' if p == f'--to={to_val}' else p for p in parts]
+        logger.info('gog: adjusted --to=%s → --to=%s (exclusive end)', to_val, next_day)
     args = _base_args() + parts
     logger.info('gog tool called: %s', ' '.join(args))
     stdout, stderr, rc = await _run_gog(args)

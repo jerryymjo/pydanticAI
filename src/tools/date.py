@@ -28,77 +28,88 @@ def _next_weekday(today: date, target_wd: int) -> date:
     return today + timedelta(days=days_ahead)
 
 
+def _fmt(d: date) -> str:
+    return f'{d.isoformat()} ({WEEKDAYS_KO[d.weekday()]})'
+
+
+def _apply_offset(base: date, n: int, unit: str) -> date:
+    if unit.startswith('day') or unit == '일':
+        return base + timedelta(days=n)
+    if unit.startswith('week') or unit == '주':
+        return base + timedelta(weeks=n)
+    if unit.startswith('month') or unit == '개월':
+        return base + relativedelta(months=n)
+    if unit.startswith('year') or unit == '년':
+        return base + relativedelta(years=n)
+    raise ValueError(f'unknown unit: {unit}')
+
+
 def _calc(expression: str) -> str:
     today = date.today()
     expr = expression.strip().lower()
 
     # "today" / "오늘"
     if expr in ('today', '오늘'):
-        wd = WEEKDAYS_KO[today.weekday()]
-        return f'{today.isoformat()} ({wd})'
+        return _fmt(today)
 
     # "tomorrow" / "내일"
     if expr in ('tomorrow', '내일'):
-        d = today + timedelta(days=1)
-        return f'{d.isoformat()} ({WEEKDAYS_KO[d.weekday()]})'
+        return _fmt(today + timedelta(days=1))
 
     # "yesterday" / "어제"
     if expr in ('yesterday', '어제'):
-        d = today - timedelta(days=1)
-        return f'{d.isoformat()} ({WEEKDAYS_KO[d.weekday()]})'
+        return _fmt(today - timedelta(days=1))
 
-    # "+N days/weeks/months/years" or "-N days/weeks/months/years"
+    # "YYYY-MM-DD + N days/weeks/months/years" (base date + offset)
+    m = re.match(
+        r'^(\d{4}-\d{2}-\d{2})\s*([+-])\s*(\d+)\s*(days?|weeks?|months?|years?|일|주|개월|년)$',
+        expr,
+    )
+    if m:
+        base = date.fromisoformat(m.group(1))
+        sign = 1 if m.group(2) == '+' else -1
+        n = sign * int(m.group(3))
+        return _fmt(_apply_offset(base, n, m.group(4)))
+
+    # "+N days/weeks/months/years" or "-N ..." (from today)
     m = re.match(r'^([+-]?\d+)\s*(days?|weeks?|months?|years?|일|주|개월|년)$', expr)
     if m:
         n = int(m.group(1))
-        unit = m.group(2)
-        if unit.startswith('day') or unit == '일':
-            d = today + timedelta(days=n)
-        elif unit.startswith('week') or unit == '주':
-            d = today + timedelta(weeks=n)
-        elif unit.startswith('month') or unit == '개월':
-            d = today + relativedelta(months=n)
-        elif unit.startswith('year') or unit == '년':
-            d = today + relativedelta(years=n)
-        else:
-            return f'알 수 없는 단위: {unit}'
-        return f'{d.isoformat()} ({WEEKDAYS_KO[d.weekday()]})'
+        return _fmt(_apply_offset(today, n, m.group(2)))
 
     # "next/this friday" / "다음주 금요일" / "이번주 금요일"
     m = re.match(r'^(next|this|다음주?|이번주?)\s+(\w+)$', expr)
     if m:
         prefix = m.group(1)
-        wd_name = m.group(2)
-        target_wd = WEEKDAY_MAP.get(wd_name)
+        target_wd = WEEKDAY_MAP.get(m.group(2))
         if target_wd is not None:
-            d = _next_weekday(today, target_wd)
-            if prefix in ('next', '다음', '다음주'):
-                if d - today <= timedelta(days=7):
-                    pass  # already next occurrence
-                # if "next" and the result is this week, add 7
-                if today.weekday() < target_wd and prefix in ('next', '다음', '다음주'):
-                    d = d + timedelta(days=7) if (d - today).days <= 7 and prefix in ('next', '다음', '다음주') else d
-                # Simpler: for "next", always get the occurrence in next week
-                next_monday = today + timedelta(days=(7 - today.weekday()))
+            if prefix in ('this', '이번', '이번주'):
+                # This week: find the target weekday in current week (Mon-Sun)
+                days_since_monday = today.weekday()
+                this_monday = today - timedelta(days=days_since_monday)
+                d = this_monday + timedelta(days=target_wd)
+            else:
+                # Next week: find the target weekday in next week
+                days_until_next_monday = 7 - today.weekday()
+                next_monday = today + timedelta(days=days_until_next_monday)
                 d = next_monday + timedelta(days=target_wd)
-            return f'{d.isoformat()} ({WEEKDAYS_KO[d.weekday()]})'
+            return _fmt(d)
 
-    # "weekday of YYYY-MM-DD" / "YYYY-MM-DD 무슨 요일"
-    m = re.match(r'^(\d{4}-\d{2}-\d{2})\s*(weekday|요일|무슨\s*요일)?$', expr)
+    # "YYYY-MM-DD" (weekday lookup)
+    m = re.match(r'^(\d{4}-\d{2}-\d{2})(?:\s+(?:weekday|요일|무슨\s*요일))?$', expr)
     if not m:
         m = re.match(r'^(?:weekday\s+(?:of\s+)?)?(\d{4}-\d{2}-\d{2})$', expr)
     if m:
-        d = date.fromisoformat(m.group(1))
-        return f'{d.isoformat()} ({WEEKDAYS_KO[d.weekday()]})'
+        return _fmt(date.fromisoformat(m.group(1)))
 
-    # "days until YYYY-MM-DD"
+    # "days until YYYY-MM-DD" / "며칠 남 YYYY-MM-DD"
     m = re.match(r'^(?:days?\s+(?:until|to|till)|며칠\s*(?:남|뒤))\s+(\d{4}-\d{2}-\d{2})$', expr)
     if m:
         d = date.fromisoformat(m.group(1))
         delta = (d - today).days
         return f'{abs(delta)}일 ({"후" if delta >= 0 else "전"})'
 
-    return f'식을 이해할 수 없습니다: {expression}. 예: "next friday", "+3 days", "2026-03-15", "다음주 목요일"'
+    return f'식을 이해할 수 없습니다: {expression}. 예: "next friday", "+3 days", "2026-03-15", "2026-02-21 + 7 days", "다음주 목요일"'
 
 
 @agent.tool_plain
