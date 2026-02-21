@@ -118,7 +118,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     last_sent = buffer
                     last_edit_time = now
 
-            # Final update with HTML formatting
+            # Final update: always apply HTML formatting
             if buffer:
                 formatted = md_to_html(buffer)
                 if sent_message is None:
@@ -128,16 +128,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                         )
                     except Exception:
                         sent_message = await update.message.reply_text(buffer)
-                elif buffer != last_sent:
+                else:
                     try:
                         await sent_message.edit_text(
                             formatted, parse_mode=ParseMode.HTML,
                         )
                     except Exception:
-                        try:
-                            await sent_message.edit_text(buffer)
-                        except Exception:
-                            pass
+                        pass
 
             # Save conversation history
             chat_histories[chat_id] = list(stream.all_messages())
