@@ -1,6 +1,7 @@
 """Web tools: search, web_fetch, search_and_read."""
 
 import asyncio
+import logging
 import os
 import random
 
@@ -8,6 +9,8 @@ import httpx
 import trafilatura
 
 from agent import agent
+
+logger = logging.getLogger(__name__)
 
 SEARXNG_URL = os.getenv('SEARXNG_URL', 'http://searxng:8080')
 
@@ -82,6 +85,7 @@ async def _fetch_and_extract(url: str) -> str:
 @agent.tool_plain
 async def search(query: str) -> str:
     """SearXNG로 웹 검색을 수행합니다."""
+    logger.info('search tool called: %s', query)
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             f'{SEARXNG_URL}/search',
@@ -102,6 +106,7 @@ async def search(query: str) -> str:
 @agent.tool_plain
 async def web_fetch(url: str) -> str:
     """웹페이지의 본문 텍스트를 추출합니다."""
+    logger.info('web_fetch tool called: %s', url)
     text = await _fetch_and_extract(url)
     if len(text) > 8000:
         text = text[:8000] + '\n... (잘림)'
@@ -111,6 +116,7 @@ async def web_fetch(url: str) -> str:
 @agent.tool_plain
 async def search_and_read(query: str) -> str:
     """웹 검색 후 상위 결과들의 본문을 읽어옵니다."""
+    logger.info('search_and_read tool called: %s', query)
     # 검색
     async with httpx.AsyncClient() as client:
         resp = await client.get(

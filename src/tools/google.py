@@ -1,9 +1,12 @@
 """Google tools: gog (Gmail, Calendar, Chat, Drive, Docs, Sheets, Tasks)."""
 
 import asyncio
+import logging
 import os
 
 from agent import agent
+
+logger = logging.getLogger(__name__)
 
 GOG_PATH = os.getenv('GOG_PATH', '/app/gog')
 GOG_ACCOUNT = os.getenv('GOG_ACCOUNT', '')
@@ -20,6 +23,7 @@ async def gog(command: str) -> str:
         args.append(f'--account={GOG_ACCOUNT}')
     args.extend(['--no-input', '--json'])
     args.extend(command.split())
+    logger.info('gog tool called: %s', ' '.join(args))
     proc = await asyncio.create_subprocess_exec(
         *args,
         stdout=asyncio.subprocess.PIPE,
@@ -28,7 +32,10 @@ async def gog(command: str) -> str:
     stdout, stderr = await proc.communicate()
     output = stdout.decode()
     if proc.returncode != 0:
-        output += f'\nError: {stderr.decode()}'
+        err = stderr.decode()
+        logger.error('gog failed (rc=%d): %s', proc.returncode, err)
+        output += f'\nError: {err}'
     if len(output) > 4000:
         output = output[:4000] + '\n... (잘림)'
+    logger.info('gog result: %d chars, rc=%d', len(output), proc.returncode)
     return output
