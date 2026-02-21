@@ -29,3 +29,23 @@ def md_to_html(text: str) -> str:
     # links [text](url)
     t = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', t)
     return t
+
+
+def strip_markdown(text: str) -> str:
+    """Strip Markdown formatting, returning clean plain text."""
+    t = text
+    # code blocks → content only
+    t = re.sub(r'```(?:\w*)\n(.*?)```', r'\1', t, flags=re.DOTALL)
+    # inline code → content only
+    t = re.sub(r'`([^`]+)`', r'\1', t)
+    # bold/italic/strikethrough → content only
+    t = re.sub(r'\*\*(.+?)\*\*', r'\1', t)
+    t = re.sub(r'__(.+?)__', r'\1', t)
+    t = re.sub(r'\*(.+?)\*', r'\1', t)
+    t = re.sub(r'(?<!\w)_(.+?)_(?!\w)', r'\1', t)
+    t = re.sub(r'~~(.+?)~~', r'\1', t)
+    # headings → content only
+    t = re.sub(r'^#{1,6}\s+(.+)$', r'\1', t, flags=re.MULTILINE)
+    # links → text (url)
+    t = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 (\2)', t)
+    return t

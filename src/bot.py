@@ -17,7 +17,7 @@ from telegram.ext import (
 
 from agent import agent  # noqa: F401 — must import before tools
 import tools  # noqa: F401 — registers tools on agent
-from format import md_to_html
+from format import md_to_html, strip_markdown
 from pydantic_ai.messages import ModelMessage
 
 logging.basicConfig(
@@ -93,20 +93,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             # Final update: always apply HTML formatting
             if buffer:
                 formatted = md_to_html(buffer)
+                plain = strip_markdown(buffer)
                 if sent_message is None:
                     try:
                         sent_message = await update.message.reply_text(
                             formatted, parse_mode=ParseMode.HTML,
                         )
                     except Exception:
-                        sent_message = await update.message.reply_text(buffer)
+                        logger.warning('HTML send failed, falling back to plain text')
+                        sent_message = await update.message.reply_text(plain)
                 else:
                     try:
                         await sent_message.edit_text(
                             formatted, parse_mode=ParseMode.HTML,
                         )
                     except Exception:
-                        pass
+                        logger.warning('HTML edit failed, falling back to plain text')
+                        try:
+                            await sent_message.edit_text(plain)
+                        except Exception:
+                            pass
 
             # Save conversation history
             chat_histories[chat_id] = list(stream.all_messages())
