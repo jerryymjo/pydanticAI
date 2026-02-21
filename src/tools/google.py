@@ -41,7 +41,7 @@ def _base_args() -> list[str]:
     args = [GOG_PATH]
     if GOG_ACCOUNT:
         args.append(f'--account={GOG_ACCOUNT}')
-    args.extend(['--no-input', '--json'])
+    args.extend(['--no-input', '--json', '--force'])
     return args
 
 
