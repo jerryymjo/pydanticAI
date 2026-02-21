@@ -75,19 +75,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 buffer += chunk
                 now = time.time()
 
+                display = strip_think(buffer)
                 should_edit = (
-                    len(buffer) - len(last_sent) >= MIN_CHARS_DELTA
+                    display
+                    and len(display) - len(last_sent) >= MIN_CHARS_DELTA
                     and now - last_edit_time >= EDIT_INTERVAL
                 )
                 if should_edit:
                     if sent_message is None:
-                        sent_message = await update.message.reply_text(buffer)
+                        sent_message = await update.message.reply_text(display)
                     else:
                         try:
-                            await sent_message.edit_text(buffer)
+                            await sent_message.edit_text(display)
                         except Exception:
                             pass
-                    last_sent = buffer
+                    last_sent = display
                     last_edit_time = now
 
             # Final update: always apply HTML formatting
@@ -117,6 +119,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                             await sent_message.edit_text(plain)
                         except Exception:
                             pass
+
+            # If no message was sent (tool-only response or empty)
+            if sent_message is None and not buffer:
+                result = stream.get_output()
+                sent_message = await update.message.reply_text(
+                    str(result.output) if hasattr(result, 'output') and result.output else '처리 완료했습니다.'
+                )
 
             # Save conversation history
             chat_histories[chat_id] = list(stream.all_messages())

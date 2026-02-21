@@ -6,7 +6,11 @@ import re
 
 def strip_think(text: str) -> str:
     """Remove Qwen3 <think>...</think> blocks from model output."""
-    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+    # Closed tags: <think>...</think>
+    t = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    # Unclosed tag: <think>... (no closing tag)
+    t = re.sub(r'<think>.*', '', t, flags=re.DOTALL)
+    return t.strip()
 
 
 def md_to_html(text: str) -> str:

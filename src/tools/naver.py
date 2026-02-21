@@ -1,5 +1,6 @@
 """Naver tools: news_search for Korean news via Naver Search API."""
 
+import html as html_mod
 import logging
 import os
 
@@ -39,8 +40,8 @@ async def news_search(query: str) -> str:
         return '뉴스 검색 결과가 없습니다.'
     results = []
     for item in items:
-        title = item['title'].replace('<b>', '').replace('</b>', '')
-        desc = item['description'].replace('<b>', '').replace('</b>', '')
+        title = html_mod.unescape(item['title'].replace('<b>', '').replace('</b>', ''))
+        desc = html_mod.unescape(item['description'].replace('<b>', '').replace('</b>', ''))
         results.append(f"**{title}**\n{item['link']}\n{desc}")
     output = '\n\n'.join(results)
     logger.info('news_search result: %d items', len(items))
