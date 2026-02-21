@@ -14,6 +14,7 @@ VLLM_BASE_URL = os.getenv('VLLM_BASE_URL', 'http://vllm:8000/v1')
 VLLM_MODEL = os.getenv('VLLM_MODEL', 'Qwen/Qwen3-32B-FP8')
 SYSTEM_PROMPT = os.getenv(
     'SYSTEM_PROMPT',
+    '/no_think\n'
     '너는 자비스다. 한국어로 답하라. 도구를 적극적으로 활용해라.\n'
     '일정, 이메일, 드라이브, 할일 등 Google 관련 요청에는 반드시 gog 도구를 사용해라.\n'
     '날짜 계산(다음주 금요일, 3일 후 등)은 반드시 date_calc 도구를 사용해라. 절대 직접 계산하지 마라.\n'
