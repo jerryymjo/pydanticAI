@@ -12,11 +12,10 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 VLLM_BASE_URL = os.getenv('VLLM_BASE_URL', 'http://vllm:8000/v1')
 VLLM_MODEL = os.getenv('VLLM_MODEL', 'mesolitica/Qwen2.5-72B-Instruct-FP8')
-_BASE_PROMPT = os.getenv(
+SYSTEM_PROMPT = os.getenv(
     'SYSTEM_PROMPT',
     '너는 자비스다. 한국어로 답하라. 도구를 적극적으로 활용해라.',
 )
-SYSTEM_PROMPT = f'{_BASE_PROMPT}\n오늘 날짜: {date.today().isoformat()}'
 
 model = OpenAIChatModel(
     VLLM_MODEL,
@@ -41,3 +40,8 @@ agent = Agent(
     system_prompt=SYSTEM_PROMPT,
     history_processors=[sliding_window],
 )
+
+
+@agent.system_prompt
+def dynamic_date() -> str:
+    return f'오늘 날짜: {date.today().isoformat()}'
