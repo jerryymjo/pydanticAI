@@ -41,6 +41,17 @@ async def gog(command: str) -> str:
     명령어가 실패하면 사용법이 자동으로 표시됩니다. 그걸 보고 올바른 플래그로 다시 호출하세요.
     """
     parts = command.split()
+    # Normalize space-separated flags to = format: --from 2026-01-01 → --from=2026-01-01
+    normalized = []
+    i = 0
+    while i < len(parts):
+        if i + 1 < len(parts) and parts[i] in ('--from', '--to') and re.match(r'^\d{4}-\d{2}-\d{2}$', parts[i + 1]):
+            normalized.append(f'{parts[i]}={parts[i + 1]}')
+            i += 2
+        else:
+            normalized.append(parts[i])
+            i += 1
+    parts = normalized
     # Fix: Google Calendar API --to is exclusive.
     # If --from and --to are the same date, bump --to by 1 day.
     from_val = to_val = None
