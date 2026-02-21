@@ -1,4 +1,4 @@
-"""Agent tools: search, web_fetch, search_and_read, gog."""
+"""Web tools: search, web_fetch, search_and_read."""
 
 import asyncio
 import os
@@ -10,8 +10,6 @@ import trafilatura
 from agent import agent
 
 SEARXNG_URL = os.getenv('SEARXNG_URL', 'http://searxng:8080')
-GOG_PATH = os.getenv('GOG_PATH', '/app/gog')
-GOG_ACCOUNT = os.getenv('GOG_ACCOUNT', '')
 
 _USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -135,28 +133,3 @@ async def search_and_read(query: str) -> str:
 
     bodies = await asyncio.gather(*[_read(r) for r in results])
     return '\n\n---\n\n'.join(bodies)
-
-
-@agent.tool_plain
-async def gog(command: str) -> str:
-    """Google 서비스에 접근합니다 (Gmail, Calendar, Chat, Drive, Docs, Sheets, Tasks 등).
-
-    예: 'gmail search "from:someone"', 'calendar list', 'drive list', 'tasks list'
-    """
-    args = [GOG_PATH]
-    if GOG_ACCOUNT:
-        args.append(f'--account={GOG_ACCOUNT}')
-    args.extend(['--no-input', '--json'])
-    args.extend(command.split())
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
-    output = stdout.decode()
-    if proc.returncode != 0:
-        output += f'\nError: {stderr.decode()}'
-    if len(output) > 4000:
-        output = output[:4000] + '\n... (잘림)'
-    return output
