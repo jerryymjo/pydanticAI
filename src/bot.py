@@ -1,11 +1,14 @@
 """Telegram bot with PydanticAI streaming."""
 
+import html
 import logging
 import os
+import re
 import time
 from collections import defaultdict
 
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -23,6 +26,33 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+def md_to_html(text: str) -> str:
+    """Convert common Markdown to Telegram-safe HTML."""
+    t = html.escape(text)
+    # code blocks: ```lang\n...\n``` → <pre><code>...</code></pre>
+    t = re.sub(
+        r'```(?:\w*)\n(.*?)```',
+        lambda m: f'<pre><code>{m.group(1)}</code></pre>',
+        t,
+        flags=re.DOTALL,
+    )
+    # inline code
+    t = re.sub(r'`([^`]+)`', r'<code>\1</code>', t)
+    # bold: **text** or __text__
+    t = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', t)
+    t = re.sub(r'__(.+?)__', r'<b>\1</b>', t)
+    # italic: *text* or _text_
+    t = re.sub(r'\*(.+?)\*', r'<i>\1</i>', t)
+    t = re.sub(r'(?<!\w)_(.+?)_(?!\w)', r'<i>\1</i>', t)
+    # strikethrough
+    t = re.sub(r'~~(.+?)~~', r'<s>\1</s>', t)
+    # headings → bold
+    t = re.sub(r'^#{1,6}\s+(.+)$', r'<b>\1</b>', t, flags=re.MULTILINE)
+    # links [text](url)
+    t = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', t)
+    return t
+
 
 TELEGRAM_BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
 ALLOWED_CHAT_IDS = os.getenv('ALLOWED_CHAT_IDS', '')
@@ -88,15 +118,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     last_sent = buffer
                     last_edit_time = now
 
-            # Final update with complete text
+            # Final update with HTML formatting
             if buffer:
+                formatted = md_to_html(buffer)
                 if sent_message is None:
-                    sent_message = await update.message.reply_text(buffer)
+                    try:
+                        sent_message = await update.message.reply_text(
+                            formatted, parse_mode=ParseMode.HTML,
+                        )
+                    except Exception:
+                        sent_message = await update.message.reply_text(buffer)
                 elif buffer != last_sent:
                     try:
-                        await sent_message.edit_text(buffer)
+                        await sent_message.edit_text(
+                            formatted, parse_mode=ParseMode.HTML,
+                        )
                     except Exception:
-                        pass
+                        try:
+                            await sent_message.edit_text(buffer)
+                        except Exception:
+                            pass
 
             # Save conversation history
             chat_histories[chat_id] = list(stream.all_messages())
