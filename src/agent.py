@@ -11,7 +11,7 @@ from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
 
 VLLM_BASE_URL = os.getenv('VLLM_BASE_URL', 'http://vllm:8000/v1')
-VLLM_MODEL = os.getenv('VLLM_MODEL', 'mesolitica/Qwen2.5-72B-Instruct-FP8')
+VLLM_MODEL = os.getenv('VLLM_MODEL', 'Qwen/Qwen3-32B-FP8')
 SYSTEM_PROMPT = os.getenv(
     'SYSTEM_PROMPT',
     '너는 자비스다. 한국어로 답하라. 도구를 적극적으로 활용해라.\n'
