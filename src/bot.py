@@ -1,8 +1,12 @@
-"""Telegram bot with PydanticAI streaming."""
+"""Telegram bot with PydanticAI agent.run().
+
+Uses agent.run() instead of run_stream() because run_stream() stops executing
+tool calls when the model also produces text content (e.g. Qwen3 <think> tags).
+agent.run() always runs the full agent graph including all tool calls.
+"""
 
 import logging
 import os
-import time
 from collections import defaultdict
 
 from telegram import Update
@@ -32,10 +36,6 @@ ALLOWED_CHAT_IDS = os.getenv('ALLOWED_CHAT_IDS', '')
 # Per-chat conversation history
 chat_histories: dict[int, list[ModelMessage]] = defaultdict(list)
 
-# Streaming config
-EDIT_INTERVAL = 1.0  # min seconds between message edits
-MIN_CHARS_DELTA = 50  # min new chars before editing
-
 
 def is_allowed(chat_id: int) -> bool:
     if not ALLOWED_CHAT_IDS:
@@ -64,82 +64,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await update.effective_chat.send_action('typing')
 
-    sent_message = None
-    buffer = ''
-    last_sent = ''
-    last_edit_time = 0.0
-
     try:
-        async with agent.run_stream(user_msg, message_history=history) as stream:
-            async for chunk in stream.stream_text(delta=True):
-                buffer += chunk
-                now = time.time()
+        result = await agent.run(user_msg, message_history=history)
+        text = strip_think(result.output or '')
+        if not text:
+            text = '처리 완료했습니다.'
 
-                display = strip_think(buffer)
-                should_edit = (
-                    display
-                    and len(display) - len(last_sent) >= MIN_CHARS_DELTA
-                    and now - last_edit_time >= EDIT_INTERVAL
-                )
-                if should_edit:
-                    if sent_message is None:
-                        sent_message = await update.message.reply_text(display)
-                    else:
-                        try:
-                            await sent_message.edit_text(display)
-                        except Exception:
-                            pass
-                    last_sent = display
-                    last_edit_time = now
+        formatted = md_to_html(text)
+        plain = strip_markdown(text)
+        if not plain:
+            plain = text
 
-            # Final update: always apply HTML formatting
-            # Strip <think> tags from Qwen3 thinking output
-            buffer = strip_think(buffer)
-            if buffer:
-                formatted = md_to_html(buffer)
-                plain = strip_markdown(buffer)
-                if not plain:
-                    plain = buffer
-                if sent_message is None:
-                    try:
-                        sent_message = await update.message.reply_text(
-                            formatted, parse_mode=ParseMode.HTML,
-                        )
-                    except Exception:
-                        logger.warning('HTML send failed, falling back to plain text')
-                        sent_message = await update.message.reply_text(plain)
-                else:
-                    try:
-                        await sent_message.edit_text(
-                            formatted, parse_mode=ParseMode.HTML,
-                        )
-                    except Exception:
-                        logger.warning('HTML edit failed, falling back to plain text')
-                        try:
-                            await sent_message.edit_text(plain)
-                        except Exception:
-                            pass
+        try:
+            await update.message.reply_text(formatted, parse_mode=ParseMode.HTML)
+        except Exception:
+            logger.warning('HTML send failed, falling back to plain text')
+            await update.message.reply_text(plain)
 
-            # If no message was sent (tool-only response or empty)
-            if sent_message is None and not buffer:
-                result = stream.get_output()
-                sent_message = await update.message.reply_text(
-                    str(result.output) if hasattr(result, 'output') and result.output else '처리 완료했습니다.'
-                )
-
-            # Save conversation history
-            chat_histories[chat_id] = list(stream.all_messages())
+        chat_histories[chat_id] = list(result.all_messages())
 
     except Exception as e:
         logger.error('Error handling message: %s', e, exc_info=True)
-        error_msg = f'오류가 발생했습니다: {type(e).__name__}'
-        if sent_message:
-            try:
-                await sent_message.edit_text(error_msg)
-            except Exception:
-                pass
-        else:
-            await update.message.reply_text(error_msg)
+        await update.message.reply_text(f'오류가 발생했습니다: {type(e).__name__}')
 
 
 def main() -> None:
