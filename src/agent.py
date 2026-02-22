@@ -1,7 +1,7 @@
 """PydanticAI agent configuration."""
 
 import os
-from datetime import date, datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
