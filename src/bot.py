@@ -1,7 +1,7 @@
 """Telegram bot with PydanticAI agent.run() + Qdrant vector memory.
 
 Uses agent.run() instead of run_stream() because run_stream() stops executing
-tool calls when the model also produces text content (e.g. Qwen3 <think> tags).
+tool calls when the model also produces text content (e.g. <think> tags).
 agent.run() always runs the full agent graph including all tool calls.
 """
 
