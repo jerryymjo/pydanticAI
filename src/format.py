@@ -1,7 +1,14 @@
-"""Markdown → Telegram HTML converter."""
+"""Markdown → Telegram HTML converter using markdown-it-py."""
 
-import html
+import html as html_mod
 import re
+
+from markdown_it import MarkdownIt
+
+_md = MarkdownIt()
+
+# Telegram이 지원하는 HTML 태그
+_TG_TAGS = frozenset('b i s u a code pre blockquote'.split())
 
 
 def strip_think(text: str) -> str:
@@ -14,48 +21,59 @@ def strip_think(text: str) -> str:
 
 
 def md_to_html(text: str) -> str:
-    """Convert common Markdown to Telegram-safe HTML."""
-    t = strip_think(text)
-    t = html.escape(t)
-    # code blocks: ```lang\n...\n``` → <pre><code>...</code></pre>
-    t = re.sub(
-        r'```(?:\w*)\n(.*?)```',
-        lambda m: f'<pre><code>{m.group(1)}</code></pre>',
-        t,
-        flags=re.DOTALL,
-    )
-    # inline code
-    t = re.sub(r'`([^`]+)`', r'<code>\1</code>', t)
-    # bold: **text** or __text__
-    t = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', t)
-    t = re.sub(r'__(.+?)__', r'<b>\1</b>', t)
-    # italic: *text* or _text_
-    t = re.sub(r'\*(.+?)\*', r'<i>\1</i>', t)
-    t = re.sub(r'(?<!\w)_(.+?)_(?!\w)', r'<i>\1</i>', t)
-    # strikethrough
-    t = re.sub(r'~~(.+?)~~', r'<s>\1</s>', t)
-    # headings → bold
-    t = re.sub(r'^#{1,6}\s+(.+)$', r'<b>\1</b>', t, flags=re.MULTILINE)
-    # links [text](url)
-    t = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', t)
-    return t
+    """Convert Markdown to Telegram-compatible HTML via markdown-it-py."""
+    text = strip_think(text)
+    if not text:
+        return ''
+
+    rendered = _md.render(text)
+
+    t = rendered
+
+    # --- 텔레그램 미지원 태그 → 텍스트 변환 ---
+
+    # <p> → 줄바꿈
+    t = t.replace('<p>', '').replace('</p>', '\n')
+
+    # 제목 → 볼드
+    t = re.sub(r'<h[1-6][^>]*>', '<b>', t)
+    t = re.sub(r'</h[1-6]>', '</b>\n', t)
+
+    # 시맨틱 → 텔레그램 태그
+    t = t.replace('<strong>', '<b>').replace('</strong>', '</b>')
+    t = t.replace('<em>', '<i>').replace('</em>', '</i>')
+    t = t.replace('<del>', '<s>').replace('</del>', '</s>')
+
+    # 리스트 → 유니코드 불릿
+    t = re.sub(r'<[ou]l>\n?', '', t)
+    t = re.sub(r'</[ou]l>\n?', '', t)
+    t = re.sub(r'<li>\n?', '• ', t)
+    t = t.replace('</li>', '')
+
+    # <br> → 줄바꿈
+    t = re.sub(r'<br\s*/?>', '\n', t)
+
+    # <hr> → 구분선
+    t = re.sub(r'<hr\s*/?>', '', t)
+
+    # 미지원 태그 제거 (내용은 유지)
+    def _keep_tg(m: re.Match) -> str:
+        tag = m.group(1).strip('/').split()[0].lower()
+        return m.group(0) if tag in _TG_TAGS else ''
+    t = re.sub(r'<(/?\w[^>]*)>', _keep_tg, t)
+
+    # 여러 줄바꿈 정리
+    t = re.sub(r'\n{3,}', '\n\n', t)
+    return t.strip()
 
 
 def strip_markdown(text: str) -> str:
     """Strip Markdown formatting, returning clean plain text."""
-    t = strip_think(text)
-    # code blocks → content only
-    t = re.sub(r'```(?:\w*)\n(.*?)```', r'\1', t, flags=re.DOTALL)
-    # inline code → content only
-    t = re.sub(r'`([^`]+)`', r'\1', t)
-    # bold/italic/strikethrough → content only
-    t = re.sub(r'\*\*(.+?)\*\*', r'\1', t)
-    t = re.sub(r'__(.+?)__', r'\1', t)
-    t = re.sub(r'\*(.+?)\*', r'\1', t)
-    t = re.sub(r'(?<!\w)_(.+?)_(?!\w)', r'\1', t)
-    t = re.sub(r'~~(.+?)~~', r'\1', t)
-    # headings → content only
-    t = re.sub(r'^#{1,6}\s+(.+)$', r'\1', t, flags=re.MULTILINE)
-    # links → text (url)
-    t = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 (\2)', t)
-    return t
+    text = strip_think(text)
+    if not text:
+        return ''
+    rendered = _md.render(text)
+    plain = re.sub(r'<[^>]+>', '', rendered)
+    plain = html_mod.unescape(plain)
+    plain = re.sub(r'\n{3,}', '\n\n', plain)
+    return plain.strip()
