@@ -56,6 +56,8 @@ async def gog(
     tomorrow: bool = False,
     days: int = 0,
     # --- calendar create/update ---
+    start_time: str = '',
+    end_time: str = '',
     summary: str = '',
     description: str = '',
     location: str = '',
@@ -88,6 +90,8 @@ async def gog(
         today: 오늘 일정
         tomorrow: 내일 일정
         days: N일간 일정 (예: 7)
+        start_time: 시작 시간 HH:MM (예: 19:00). from_date와 합쳐서 RFC3339 생성
+        end_time: 종료 시간 HH:MM (예: 20:00). 생략시 start_time+1시간
         summary: 캘린더 일정 제목 (create/update)
         description: 캘린더 일정 설명 (create/update)
         location: 캘린더 일정 장소 (create/update)
@@ -103,6 +107,16 @@ async def gog(
         query: 검색어 (calendar search, gmail search, drive search)
         item_id: 대상 ID (eventId, messageId, taskId, fileId)
     """
+    # start_time/end_time이 있으면 from_date/to_date에 합성
+    if start_time and from_date and 'T' not in from_date:
+        from_date = f'{from_date}T{start_time}:00'
+        if end_time:
+            to_date = f'{(to_date or from_date.split("T")[0])}T{end_time}:00'
+        else:
+            # end_time 생략 시 start_time + 1시간
+            h, m = start_time.split(':')
+            to_date = f'{(to_date or from_date.split("T")[0])}T{int(h)+1:02d}:{m}:00'
+
     from_date = _ensure_tz(from_date)
     to_date = _ensure_tz(to_date)
     args = _base_args() + [service, action]
