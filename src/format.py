@@ -12,7 +12,7 @@ _TG_TAGS = frozenset('b i s u a code pre blockquote'.split())
 
 
 def strip_think(text: str) -> str:
-    """Remove Qwen3 <think>...</think> blocks from model output."""
+    """Remove <think>...</think> blocks from model output."""
     # Closed tags: <think>...</think>
     t = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
     # Unclosed tag: <think>... (no closing tag)

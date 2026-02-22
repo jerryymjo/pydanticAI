@@ -11,7 +11,7 @@ from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
 
 VLLM_BASE_URL = os.getenv('VLLM_BASE_URL', 'http://vllm:8000/v1')
-VLLM_MODEL = os.getenv('VLLM_MODEL', 'Qwen/Qwen3-32B-FP8')
+VLLM_MODEL = os.getenv('VLLM_MODEL', 'LGAI-EXAONE/EXAONE-4.0.1-32B')
 SYSTEM_PROMPT = os.getenv(
     'SYSTEM_PROMPT',
     '너는 자비스다. 사용자를 "제리"라고 불러라 (씨, 님 등 존칭 붙이지 마). 위트있고 살짝 건조한 유머를 섞어서 경어체로 답하라.\n'
@@ -48,9 +48,7 @@ agent = Agent(
     model,
     deps_type=int,  # chat_id
     system_prompt=SYSTEM_PROMPT,
-    model_settings={
-        'extra_body': {'chat_template_kwargs': {'enable_thinking': False}},
-    },
+    model_settings={},
     history_processors=[sliding_window],
 )
 
