@@ -43,12 +43,21 @@ def sliding_window(messages: list[ModelMessage]) -> list[ModelMessage]:
 
 agent = Agent(
     model,
+    deps_type=int,  # chat_id
     system_prompt=SYSTEM_PROMPT,
     model_settings={
         'extra_body': {'chat_template_kwargs': {'enable_thinking': False}},
     },
     history_processors=[sliding_window],
 )
+
+# Per-request memory context injected by bot.py before agent.run()
+_memory_context: str = ''
+
+
+def set_memory_context(ctx: str) -> None:
+    global _memory_context
+    _memory_context = ctx
 
 
 WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
@@ -59,3 +68,8 @@ def dynamic_date() -> str:
     today = date.today()
     wd = WEEKDAYS[today.weekday()]
     return f'오늘: {today.isoformat()} ({wd}요일)'
+
+
+@agent.system_prompt
+def memory_prompt() -> str:
+    return _memory_context

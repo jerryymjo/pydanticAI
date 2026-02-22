@@ -33,6 +33,14 @@ services:
     networks:
       - pydantic-net
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - pydantic-net
+
   pydantic-bot:
     build: .
     env_file: .env
@@ -40,9 +48,11 @@ services:
       - ./src:/app
       - ~/projects/pydantic-assets/gog:/app/gog:ro
       - ~/.config/gogcli:/root/.config/gogcli:ro
+      - ~/.cache/huggingface:/root/.cache/huggingface
     depends_on:
       - vllm
       - searxng
+      - qdrant
     restart: unless-stopped
     networks:
       - pydantic-net
@@ -60,6 +70,9 @@ services:
     restart: unless-stopped
     networks:
       - pydantic-net
+
+volumes:
+  qdrant-data:
 
 networks:
   pydantic-net:

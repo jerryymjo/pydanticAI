@@ -1,4 +1,4 @@
-"""Telegram bot with PydanticAI agent.run().
+"""Telegram bot with PydanticAI agent.run() + Qdrant vector memory.
 
 Uses agent.run() instead of run_stream() because run_stream() stops executing
 tool calls when the model also produces text content (e.g. Qwen3 <think> tags).
@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-from agent import agent  # noqa: F401 — must import before tools
+from agent import agent, set_memory_context  # noqa: F401 — must import before tools
 import tools  # noqa: F401 — registers tools on agent
 from format import md_to_html, strip_markdown, strip_think
 from pydantic_ai.messages import ModelMessage
@@ -36,12 +36,47 @@ ALLOWED_CHAT_IDS = os.getenv('ALLOWED_CHAT_IDS', '')
 # Per-chat conversation history
 chat_histories: dict[int, list[ModelMessage]] = defaultdict(list)
 
+# Memory system availability flag
+_memory_ready = False
+
 
 def is_allowed(chat_id: int) -> bool:
     if not ALLOWED_CHAT_IDS:
         return True
     allowed = {int(x.strip()) for x in ALLOWED_CHAT_IDS.split(',') if x.strip()}
     return chat_id in allowed
+
+
+async def post_init(app: Application) -> None:
+    """Initialize Qdrant + restore histories and alarms after bot starts."""
+    global _memory_ready
+
+    try:
+        from memory import qdrant_store as qs
+        from memory.manager import restore_histories
+        from memory.alarms import restore_alarms
+        from tools.alarm import set_job_queue
+
+        qs.ensure_collections()
+        logger.info('Qdrant collections ready')
+
+        # Restore chat histories
+        restored = restore_histories()
+        for chat_id, messages in restored.items():
+            chat_histories[chat_id] = messages
+        logger.info('Restored %d chat histories', len(restored))
+
+        # Set job queue for alarm tool
+        set_job_queue(app.job_queue)
+
+        # Restore alarms
+        count = restore_alarms(app.job_queue)
+        logger.info('Restored %d alarms', count)
+
+        _memory_ready = True
+        logger.info('Memory system initialized')
+    except Exception:
+        logger.error('Memory system init failed — running without memory', exc_info=True)
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -65,7 +100,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.effective_chat.send_action('typing')
 
     try:
-        result = await agent.run(user_msg, message_history=history)
+        # Search memory for relevant context
+        if _memory_ready:
+            from memory.manager import get_relevant_context, on_turn_complete
+
+            mem_ctx = await get_relevant_context(chat_id, user_msg)
+            set_memory_context(mem_ctx)
+        else:
+            set_memory_context('')
+
+        result = await agent.run(user_msg, message_history=history, deps=chat_id)
         text = strip_think(result.output or '')
         if not text:
             text = '처리 완료했습니다.'
@@ -83,6 +127,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         chat_histories[chat_id] = list(result.all_messages())
 
+        # Save to memory asynchronously (don't block response)
+        if _memory_ready:
+            import asyncio
+
+            asyncio.create_task(
+                on_turn_complete(chat_id, user_msg, text, chat_histories[chat_id])
+            )
+
     except Exception as e:
         logger.error('Error handling message: %s', e, exc_info=True)
         await update.message.reply_text(f'오류가 발생했습니다: {type(e).__name__}')
@@ -90,6 +142,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 def main() -> None:
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    app.post_init = post_init
     app.add_handler(CommandHandler('start', cmd_start))
     app.add_handler(CommandHandler('reset', cmd_reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
