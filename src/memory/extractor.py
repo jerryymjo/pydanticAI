@@ -12,7 +12,7 @@ from memory.embeddings import embed_text
 logger = logging.getLogger(__name__)
 
 VLLM_BASE_URL = os.getenv('VLLM_BASE_URL', 'http://vllm:8000/v1')
-VLLM_MODEL = os.getenv('VLLM_MODEL', 'LGAI-EXAONE/EXAONE-4.0.1-32B')
+VLLM_MODEL = os.getenv('VLLM_MODEL', 'Qwen/Qwen3-32B')
 
 EXTRACTION_PROMPT = """\
 다음 대화에서 사용자(제리)에 대한 새로운 인사이트를 추출해라.
@@ -23,7 +23,8 @@ User: {user_text}
 Assistant: {assistant_text}
 
 JSON 배열로 응답해라. 인사이트가 없으면 빈 배열 [].
-각 항목: {{"content": "인사이트 텍스트", "category": "카테고리", "confidence": 0.0~1.0}}"""
+각 항목: {{"content": "인사이트 텍스트", "category": "카테고리", "confidence": 0.0~1.0}}
+/no_think"""
 
 
 async def maybe_extract_insights(

@@ -2,12 +2,12 @@ services:
   vllm:
     image: nvcr.io/nvidia/vllm:26.01-py3
     command: >-
-      vllm serve LGAI-EXAONE/EXAONE-4.0.1-32B
+      vllm serve Qwen/Qwen3-32B
       --host 0.0.0.0
       --port 8000
       --dtype bfloat16
       --max-model-len 32768
-      --gpu-memory-utilization 0.85
+      --gpu-memory-utilization 0.9
       --max-num-seqs 4
       --enable-auto-tool-choice
       --tool-call-parser hermes
