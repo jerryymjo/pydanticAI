@@ -15,6 +15,39 @@ GOG_PATH = os.getenv('GOG_PATH', '/app/gog')
 GOG_ACCOUNT = os.getenv('GOG_ACCOUNT', '')
 GOG_TIMEZONE = os.getenv('GOG_TIMEZONE', '+09:00')  # KST
 
+# Whitelist: (service, action) → valid parameter names
+# Params not in the set are silently dropped before CLI assembly.
+_VALID_PARAMS: dict[tuple[str, str], set[str]] = {
+    # calendar
+    ('calendar', 'list'): {'from_date', 'to_date', 'today', 'tomorrow', 'days'},
+    ('calendar', 'search'): {'query', 'from_date', 'to_date'},
+    ('calendar', 'create'): {'from_date', 'to_date', 'start_time', 'end_time', 'summary', 'description', 'location', 'attendees', 'today', 'tomorrow'},
+    ('calendar', 'update'): {'item_id', 'from_date', 'to_date', 'start_time', 'end_time', 'summary', 'description', 'location', 'attendees', 'today', 'tomorrow'},
+    ('calendar', 'delete'): {'item_id'},
+    ('calendar', 'get'): {'item_id'},
+    # gmail
+    ('gmail', 'search'): {'query'},
+    ('gmail', 'send'): {'to_email', 'cc', 'subject', 'body'},
+    ('gmail', 'get'): {'item_id'},
+    # drive
+    ('drive', 'ls'): {'query'},
+    ('drive', 'search'): {'query'},
+    ('drive', 'get'): {'item_id'},
+    ('drive', 'download'): {'item_id'},
+    ('drive', 'upload'): set(),
+    ('drive', 'mkdir'): set(),
+    ('drive', 'delete'): {'item_id'},
+    # tasks
+    ('tasks', 'lists'): set(),
+    ('tasks', 'list'): {'list_id'},
+    ('tasks', 'add'): {'list_id', 'title', 'notes', 'due'},
+    ('tasks', 'create'): {'list_id', 'title', 'notes', 'due'},
+    ('tasks', 'get'): {'list_id', 'item_id'},
+    ('tasks', 'update'): {'list_id', 'item_id', 'title', 'notes', 'due'},
+    ('tasks', 'done'): {'list_id', 'item_id'},
+    ('tasks', 'delete'): {'list_id', 'item_id'},
+}
+
 
 def _ensure_tz(dt_str: str) -> str:
     """시간이 포함된 날짜에 타임존이 없으면 자동 추가."""
@@ -107,6 +140,31 @@ async def gog(
         query: 검색어 (calendar search, gmail search, drive search)
         item_id: 대상 ID (eventId, messageId, taskId, fileId)
     """
+    # ===== Whitelist filter: drop params invalid for this service+action =====
+    valid = _VALID_PARAMS.get((service, action))
+    if valid is not None:
+        if 'from_date' not in valid: from_date = ''
+        if 'to_date' not in valid: to_date = ''
+        if 'today' not in valid: today = False
+        if 'tomorrow' not in valid: tomorrow = False
+        if 'days' not in valid: days = 0
+        if 'start_time' not in valid: start_time = ''
+        if 'end_time' not in valid: end_time = ''
+        if 'summary' not in valid: summary = ''
+        if 'description' not in valid: description = ''
+        if 'location' not in valid: location = ''
+        if 'attendees' not in valid: attendees = ''
+        if 'to_email' not in valid: to_email = ''
+        if 'cc' not in valid: cc = ''
+        if 'subject' not in valid: subject = ''
+        if 'body' not in valid: body = ''
+        if 'title' not in valid: title = ''
+        if 'notes' not in valid: notes = ''
+        if 'due' not in valid: due = ''
+        if 'list_id' not in valid: list_id = ''
+        if 'query' not in valid: query = ''
+        if 'item_id' not in valid: item_id = ''
+
     # start_time/end_time이 있으면 from_date/to_date에 합성
     if start_time and from_date and 'T' not in from_date:
         from_date = f'{from_date}T{start_time}:00'
