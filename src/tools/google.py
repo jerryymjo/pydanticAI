@@ -208,7 +208,7 @@ async def gog(
                 # list/search: from만 있으면 하루치 자동 설정
                 next_day = (date.fromisoformat(from_date) + timedelta(days=1)).isoformat()
                 args.append(f'--to={next_day}')
-    elif days > 0:
+    elif days > 0 and service == 'calendar':
         args.append(f'--days={days}')
 
     # ===== calendar create/update 플래그 =====
