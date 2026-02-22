@@ -28,6 +28,8 @@ CONVERSATIONS = 'conversations'
 MEMORIES = 'memories'
 HISTORY_SNAPSHOTS = 'history_snapshots'
 ALARMS = 'alarms'
+BRIEFINGS = 'briefings'
+MEMOS = 'memos'
 
 
 def get_client() -> QdrantClient:
@@ -56,8 +58,16 @@ def ensure_collections() -> None:
             )
             logger.info('Created collection: %s', name)
 
-    # history_snapshots and alarms don't need real vectors — use dim=1 dummy
-    for name in (HISTORY_SNAPSHOTS, ALARMS):
+    # memos use real vectors (same dim as conversations/memories)
+    if MEMOS not in existing:
+        client.create_collection(
+            collection_name=MEMOS,
+            vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
+        )
+        logger.info('Created collection: %s', MEMOS)
+
+    # history_snapshots, alarms, briefings don't need real vectors — use dim=1 dummy
+    for name in (HISTORY_SNAPSHOTS, ALARMS, BRIEFINGS):
         if name not in existing:
             client.create_collection(
                 collection_name=name,
@@ -247,3 +257,137 @@ def load_active_alarms() -> list[dict]:
         limit=1000,
     )
     return [p.payload for p in results[0]]
+
+
+# ── briefings ──
+
+
+def save_briefing(chat_id: int, time: str) -> None:
+    """Save or overwrite briefing setting for a chat (one per chat_id)."""
+    point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'briefing-{chat_id}'))
+    get_client().upsert(
+        collection_name=BRIEFINGS,
+        points=[
+            PointStruct(
+                id=point_id,
+                vector=[0.0],  # dummy
+                payload={
+                    'chat_id': chat_id,
+                    'time': time,
+                    'active': True,
+                },
+            )
+        ],
+    )
+
+
+def load_briefing(chat_id: int) -> dict | None:
+    """Load briefing setting for a chat. Returns payload dict or None."""
+    point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'briefing-{chat_id}'))
+    results = get_client().retrieve(
+        collection_name=BRIEFINGS,
+        ids=[point_id],
+    )
+    if results:
+        return results[0].payload
+    return None
+
+
+def deactivate_briefing(chat_id: int) -> None:
+    """Deactivate briefing for a chat."""
+    point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'briefing-{chat_id}'))
+    get_client().set_payload(
+        collection_name=BRIEFINGS,
+        payload={'active': False},
+        points=[point_id],
+    )
+
+
+def load_active_briefings() -> list[dict]:
+    """Load all active briefings (for restore on startup)."""
+    results = get_client().scroll(
+        collection_name=BRIEFINGS,
+        scroll_filter=Filter(
+            must=[FieldCondition(key='active', match=MatchValue(value=True))]
+        ),
+        limit=1000,
+    )
+    return [p.payload for p in results[0]]
+
+
+# ── memos ──
+
+
+def save_memo(
+    vector: list[float],
+    chat_id: int,
+    content: str,
+    category: str = 'memo',
+) -> str:
+    """Save a memo with embedding vector. Returns memo_id."""
+    memo_id = str(uuid.uuid4())
+    get_client().upsert(
+        collection_name=MEMOS,
+        points=[
+            PointStruct(
+                id=memo_id,
+                vector=vector,
+                payload={
+                    'memo_id': memo_id,
+                    'chat_id': chat_id,
+                    'content': content,
+                    'category': category,
+                    'active': True,
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        ],
+    )
+    return memo_id
+
+
+def search_memos(
+    vector: list[float], chat_id: int, limit: int = 5
+) -> list[dict]:
+    """Semantic search memos for a chat."""
+    results = get_client().query_points(
+        collection_name=MEMOS,
+        query=vector,
+        query_filter=Filter(
+            must=[
+                FieldCondition(key='chat_id', match=MatchValue(value=chat_id)),
+                FieldCondition(key='active', match=MatchValue(value=True)),
+            ]
+        ),
+        limit=limit,
+    )
+    return [{**p.payload, 'score': p.score} for p in results.points]
+
+
+def list_memos(chat_id: int) -> list[dict]:
+    """List all active memos for a chat."""
+    results = get_client().scroll(
+        collection_name=MEMOS,
+        scroll_filter=Filter(
+            must=[
+                FieldCondition(key='chat_id', match=MatchValue(value=chat_id)),
+                FieldCondition(key='active', match=MatchValue(value=True)),
+            ]
+        ),
+        limit=100,
+    )
+    return [p.payload for p in results[0]]
+
+
+def delete_memo(memo_id: str) -> bool:
+    """Deactivate a memo. Returns True if found."""
+    try:
+        get_client().set_payload(
+            collection_name=MEMOS,
+            payload={'active': False},
+            points=[memo_id],
+        )
+        return True
+    except Exception:
+        logger.error('Failed to delete memo %s', memo_id, exc_info=True)
+        return False

@@ -44,22 +44,32 @@ async def on_turn_complete(
 
 
 async def get_relevant_context(chat_id: int, user_text: str) -> str:
-    """Search conversations + memories and build context string for system prompt."""
+    """Search conversations + memories + memos and build context string for system prompt."""
     try:
         vector = await embed_text(user_text)
 
         # Search past conversations
         convos = qs.search_conversations(vector, chat_id, limit=3)
-        # Search user memories
-        memos = qs.search_memories(vector, limit=5)
+        # Search auto-extracted memories
+        memories = qs.search_memories(vector, limit=5)
+        # Search user memos
+        user_memos = qs.search_memos(vector, chat_id, limit=3)
 
         parts = []
 
-        if memos:
-            memo_lines = [f'- {m["content"]}' for m in memos if m.get('score', 0) > 0.3]
+        if memories:
+            memo_lines = [f'- {m["content"]}' for m in memories if m.get('score', 0) > 0.3]
             if memo_lines:
                 parts.append('=== 제리에 대해 알고 있는 것 ===')
                 parts.extend(memo_lines)
+
+        if user_memos:
+            user_memo_lines = [
+                f'- {m["content"]}' for m in user_memos if m.get('score', 0) > 0.4
+            ]
+            if user_memo_lines:
+                parts.append('=== 제리가 저장한 메모 ===')
+                parts.extend(user_memo_lines)
 
         if convos:
             convo_lines = []

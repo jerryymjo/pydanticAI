@@ -55,7 +55,9 @@ async def post_init(app: Application) -> None:
         from memory import qdrant_store as qs
         from memory.manager import restore_histories
         from memory.alarms import restore_alarms
+        from memory.briefing import restore_briefings
         from tools.alarm import set_job_queue
+        from tools.briefing import set_job_queue as set_briefing_job_queue
 
         qs.ensure_collections()
         logger.info('Qdrant collections ready')
@@ -66,12 +68,17 @@ async def post_init(app: Application) -> None:
             chat_histories[chat_id] = messages
         logger.info('Restored %d chat histories', len(restored))
 
-        # Set job queue for alarm tool
+        # Set job queue for alarm and briefing tools
         set_job_queue(app.job_queue)
+        set_briefing_job_queue(app.job_queue)
 
         # Restore alarms
         count = restore_alarms(app.job_queue)
         logger.info('Restored %d alarms', count)
+
+        # Restore briefings
+        briefing_count = restore_briefings(app.job_queue)
+        logger.info('Restored %d briefings', briefing_count)
 
         _memory_ready = True
         logger.info('Memory system initialized')
