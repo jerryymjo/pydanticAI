@@ -152,9 +152,42 @@ async def gog(
     is_query = action in ('list', 'search')
 
     if today:
-        args.append('--today')
+        if is_query:
+            args.append('--today')
+        else:
+            # create/update: --today 미지원 → 오늘 날짜로 변환
+            today_str = date.today().isoformat()
+            if start_time:
+                from_date = f'{today_str}T{start_time}:00{GOG_TIMEZONE}'
+                if end_time:
+                    to_date = f'{today_str}T{end_time}:00{GOG_TIMEZONE}'
+                else:
+                    h, m = start_time.split(':')
+                    to_date = f'{today_str}T{int(h)+1:02d}:{m}:00{GOG_TIMEZONE}'
+                args.append(f'--from={from_date}')
+                args.append(f'--to={to_date}')
+            else:
+                args.append(f'--from={today_str}')
+                args.append(f'--to={today_str}')
+                args.append('--all-day')
     elif tomorrow:
-        args.append('--tomorrow')
+        if is_query:
+            args.append('--tomorrow')
+        else:
+            tmrw_str = (date.today() + timedelta(days=1)).isoformat()
+            if start_time:
+                from_date = f'{tmrw_str}T{start_time}:00{GOG_TIMEZONE}'
+                if end_time:
+                    to_date = f'{tmrw_str}T{end_time}:00{GOG_TIMEZONE}'
+                else:
+                    h, m = start_time.split(':')
+                    to_date = f'{tmrw_str}T{int(h)+1:02d}:{m}:00{GOG_TIMEZONE}'
+                args.append(f'--from={from_date}')
+                args.append(f'--to={to_date}')
+            else:
+                args.append(f'--from={tmrw_str}')
+                args.append(f'--to={tmrw_str}')
+                args.append('--all-day')
     elif from_date:
         # create/update에서 날짜만 주면 → 종일 일정
         if not is_query and is_date_only(from_date):
