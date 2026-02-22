@@ -1,7 +1,7 @@
 """PydanticAI agent configuration."""
 
 import os
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
 
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
@@ -66,11 +66,14 @@ def set_memory_context(ctx: str) -> None:
 WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 
 
+KST = timezone(timedelta(hours=9))
+
+
 @agent.system_prompt
 def dynamic_date() -> str:
-    today = date.today()
-    wd = WEEKDAYS[today.weekday()]
-    return f'오늘: {today.isoformat()} ({wd}요일)'
+    now = datetime.now(KST)
+    wd = WEEKDAYS[now.weekday()]
+    return f'현재: {now.strftime("%Y-%m-%d %H:%M")} ({wd}요일)'
 
 
 @agent.system_prompt
