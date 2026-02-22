@@ -26,6 +26,7 @@ _VALID_PARAMS: dict[tuple[str, str], set[str]] = {
     ('calendar', 'delete'): {'item_id'},
     ('calendar', 'get'): {'item_id'},
     # gmail
+    ('gmail', 'list'): {'query'},
     ('gmail', 'search'): {'query'},
     ('gmail', 'send'): {'to_email', 'cc', 'subject', 'body'},
     ('gmail', 'get'): {'item_id'},
@@ -115,7 +116,7 @@ async def gog(
         service: calendar, gmail, drive, tasks
         action: 서비스별 명령어
           - calendar: list, create, update, delete, get, search
-          - gmail: search, send, get
+          - gmail: list (받은편지함), search (Gmail 검색 구문), send, get
           - drive: ls, search, get, download, upload, mkdir, delete
           - tasks: lists, list, add, get, update, done, delete
         from_date: YYYY-MM-DD 시작일 (캘린더)
@@ -140,6 +141,12 @@ async def gog(
         query: 검색어 (calendar search, gmail search, drive search)
         item_id: 대상 ID (eventId, messageId, taskId, fileId)
     """
+    # ===== gmail list → search 변환 =====
+    if service == 'gmail' and action == 'list':
+        action = 'search'
+        if not query:
+            query = 'in:inbox'
+
     # ===== Whitelist filter: drop params invalid for this service+action =====
     valid = _VALID_PARAMS.get((service, action))
     if valid is not None:
